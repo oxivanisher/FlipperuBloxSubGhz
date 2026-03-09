@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/oxi/dev/**)",
+      "Read(//opt/**)",
+      "Read(//home/oxi/**)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/ezod/flipperzero-gps/main/gps_uart.c\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/ezod/flipperzero-gps/main/gps_uart.h\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/flipperdevices/flipperzero-firmware/dev/lib/subghz/protocols/base.h\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/flipperdevices/flipperzero-firmware/dev/lib/subghz/types.h\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/flipperdevices/flipperzero-firmware/dev/targets/f7/furi_hal/furi_hal_serial_types.h\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/flipperdevices/flipperzero-firmware/dev/targets/f7/furi_hal/furi_hal_serial_control.h\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/flipperdevices/flipperzero-firmware/dev/lib/subghz/transmitter.h\")",
+      "Bash(git -C /home/oxi/dev/flipperzero-firmware sparse-checkout add applications/services/dialogs)",
+      "Bash(head -10 grep -n \"subghz_environment_alloc\\\\|subghz_environment_set_protocol\" /home/oxi/dev/flipperzero-firmware/lib/subghz/environment.h)",
+      "Bash(./fbt fap_gps_garage_opener)"
+    ]
+  }
+}
