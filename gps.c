@@ -29,9 +29,18 @@ static int32_t gps_worker_thread(void* ctx) {
     GpsWorker*    worker = ctx;
     GpsGarageApp* app    = worker->app;
 
-    /* Acquire and configure serial port */
-    worker->serial = furi_hal_serial_control_acquire(FuriHalSerialIdUsart);
-    furi_assert(worker->serial);
+    /* Acquire and configure serial port.
+     * When launched via shortcut the debug console may still hold the UART;
+     * retry a few times with a short delay before giving up gracefully. */
+    for(uint8_t tries = 0; tries < 10 && !worker->serial; tries++) {
+        worker->serial = furi_hal_serial_control_acquire(FuriHalSerialIdUsart);
+        if(!worker->serial) furi_delay_ms(50);
+    }
+    if(!worker->serial) {
+        /* Unable to get the serial port — run without GPS data */
+        furi_thread_flags_wait(EVT_STOP, FuriFlagWaitAny, FuriWaitForever);
+        return 0;
+    }
     furi_hal_serial_init(worker->serial, GPS_BAUD_RATE);
     furi_hal_serial_async_rx_start(worker->serial, uart_rx_cb, worker, false);
 
@@ -96,7 +105,7 @@ GpsWorker* gps_worker_alloc(GpsGarageApp* app) {
     w->app       = app;
     w->serial    = NULL;
     w->rx_stream = furi_stream_buffer_alloc(GPS_RX_BUF, 1);
-    w->thread    = furi_thread_alloc_ex("GpsWorker", 1024, gps_worker_thread, w);
+    w->thread    = furi_thread_alloc_ex("GpsWorker", 2048, gps_worker_thread, w);
     return w;
 }
 

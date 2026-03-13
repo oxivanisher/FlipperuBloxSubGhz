@@ -8,7 +8,7 @@ App(
         "dialogs",
         "region",
     ],
-    stack_size=4 * 1024,
+    stack_size=6 * 1024,
     fap_category="GPIO",
     fap_description="Automated garage door opener using uBlox GPS and Sub-GHz replay",
     fap_author="oxi",
