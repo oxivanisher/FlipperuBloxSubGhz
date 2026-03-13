@@ -7,15 +7,21 @@ door opens on its own.
 
 ---
 
+## Attention - Vibe Coded
+
+Please be aware, that this application is (almost) completely vibe-coded. It works in my use case and the code seemed sensible to me but ... you have been warned.
+
+---
+
 ## Hardware
 
 ### Parts
 
-| Item | Notes |
-|------|-------|
-| Flipper Zero | Any firmware ≥ 0.99 |
+| Item             | Notes                                                                |
+| ---------------- | -------------------------------------------------------------------- |
+| Flipper Zero     | Any firmware ≥ 0.99                                                  |
 | uBlox GPS module | NEO-6M, NEO-7M, NEO-8M, M8N, etc. — any NMEA-capable module at 3.3 V |
-| 4× Dupont wires | Female–female or female–male depending on module footprint |
+| 4× Dupont wires  | Female–female or female–male depending on module footprint           |
 
 ### Wiring
 
@@ -93,15 +99,15 @@ Config is saved automatically and persists across reboots
 
 ## Controls
 
-| Button | Action |
-|--------|--------|
-| **OK** (short) | Transmit immediately |
-| **OK** (long) | Toggle auto-tracking on / off |
-| **UP** (long) | Capture current GPS position as trigger target |
-| **DOWN** (long) | Browse SD card and select `.sub` file |
-| **LEFT** (short) | Decrease trigger radius by 5 m |
-| **RIGHT** (short) | Increase trigger radius by 5 m |
-| **BACK** | Exit app |
+| Button            | Action                                         |
+| ----------------- | ---------------------------------------------- |
+| **OK** (short)    | Transmit immediately                           |
+| **OK** (long)     | Toggle auto-tracking on / off                  |
+| **UP** (long)     | Capture current GPS position as trigger target |
+| **DOWN** (long)   | Browse SD card and select `.sub` file          |
+| **LEFT** (short)  | Decrease trigger radius by 5 m                 |
+| **RIGHT** (short) | Increase trigger radius by 5 m                 |
+| **BACK**          | Exit app                                       |
 
 ---
 
@@ -138,10 +144,10 @@ You can edit this file directly from the Flipper file manager or from a PC.
 
 ## Troubleshooting
 
-| Symptom | Likely cause |
-|---------|-------------|
-| `[NoFix]` after several minutes outdoors | GPS antenna blocked — most breakout boards need open sky |
-| Door does not open automatically | Tracking not enabled (hold OK), or no .sub file selected |
-| "TRANSMITTING..." hangs | .sub file corrupt or unsupported protocol |
-| Region error (TX fails silently) | Frequency not permitted in your region; re-record at the correct frequency |
-| Wrong coordinates captured | Wait for more satellites before pressing hold-UP |
+| Symptom                                  | Likely cause                                                               |
+| ---------------------------------------- | -------------------------------------------------------------------------- |
+| `[NoFix]` after several minutes outdoors | GPS antenna blocked — most breakout boards need open sky                   |
+| Door does not open automatically         | Tracking not enabled (hold OK), or no .sub file selected                   |
+| "TRANSMITTING..." hangs                  | .sub file corrupt or unsupported protocol                                  |
+| Region error (TX fails silently)         | Frequency not permitted in your region; re-record at the correct frequency |
+| Wrong coordinates captured               | Wait for more satellites before pressing hold-UP                           |
