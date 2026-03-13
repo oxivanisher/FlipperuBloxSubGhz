@@ -4,6 +4,7 @@
 #include <gui/gui.h>
 #include <gui/view_dispatcher.h>
 #include <dialogs/dialogs.h>
+#include <notification/notification.h>
 #include "config.h"
 
 /* Forward declarations to avoid circular includes */
@@ -18,10 +19,11 @@ typedef enum {
 
 typedef struct GpsGarageApp {
     /* ── UI ──────────────────────────────────────────────────────── */
-    Gui*             gui;
-    ViewDispatcher*  view_dispatcher;
-    View*            main_view;
-    DialogsApp*      dialogs;
+    Gui*              gui;
+    ViewDispatcher*   view_dispatcher;
+    View*             main_view;
+    DialogsApp*       dialogs;
+    NotificationApp*  notifications;
 
     /* ── GPS state (protected by gps_mutex) ───────────────────────── */
     FuriMutex* gps_mutex;
@@ -33,7 +35,7 @@ typedef struct GpsGarageApp {
     /* ── Runtime state ────────────────────────────────────────────── */
     float    current_distance_m; /* last computed distance to target */
     bool     in_range;
-    uint32_t last_tx_tick;       /* furi_get_tick() at last TX start  */
+    bool     trigger_armed;      /* true = will fire on next zone entry */
     bool     is_transmitting;
 
     /* ── Exit lock (requires 3× BACK while tracking) ──────────────── */

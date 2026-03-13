@@ -28,6 +28,8 @@
 #include <gui/canvas.h>
 #include <input/input.h>
 #include <dialogs/dialogs.h>
+#include <notification/notification.h>
+#include <notification/notification_messages.h>
 #include <storage/storage.h>
 #include <flipper_format/flipper_format.h>
 /* SubGHz headers — note the filenames changed in this firmware version */
@@ -72,7 +74,11 @@ static FuriHalSubGhzPreset preset_from_name(const FuriString* name) {
     return FuriHalSubGhzPresetOok650Async; /* most common garage-door preset */
 }
 
-static bool subghz_transmit_file(const char* filepath) {
+/*
+ * Transmit the .sub file `count` times with `delay_ms` between each send.
+ * The CC1101 is initialised once for the whole burst to avoid re-init races.
+ */
+static bool subghz_transmit_burst(const char* filepath, uint8_t count, uint32_t delay_ms) {
     Storage*       storage = furi_record_open(RECORD_STORAGE);
     FlipperFormat* fff     = flipper_format_file_alloc(storage);
     bool           ok      = false;
@@ -92,6 +98,7 @@ static bool subghz_transmit_file(const char* filepath) {
         FuriString* preset_str = furi_string_alloc();
         flipper_format_read_string(fff, "Preset", preset_str);
         FuriHalSubGhzPreset preset_enum = preset_from_name(preset_str);
+        furi_string_free(preset_str);
 
         /* Read custom CC1101 preset registers if needed */
         uint8_t* custom_data     = NULL;
@@ -111,40 +118,13 @@ static bool subghz_transmit_file(const char* filepath) {
         FuriString* proto_str = furi_string_alloc();
         flipper_format_read_string(fff, "Protocol", proto_str);
 
-        /* 5 repeats — catches cases where the first trigger is at the edge of range */
-        flipper_format_rewind(fff);
+        /* Ensure a reliable repeat count per send (matches stock SubGHz app behaviour) */
         uint32_t repeat = 5u;
         flipper_format_insert_or_update_uint32(fff, "Repeat", &repeat, 1);
-        flipper_format_rewind(fff);
 
-        /* Set up SubGHz environment and transmitter */
-        SubGhzEnvironment* env = subghz_environment_alloc();
-        subghz_environment_set_protocol_registry(
-            env, &subghz_protocol_registry);
-
-        SubGhzTransmitter* tx =
-            subghz_transmitter_alloc_init(env, furi_string_get_cstr(proto_str));
-
-        if(!tx) {
-            subghz_environment_free(env);
-            furi_string_free(proto_str);
-            furi_string_free(preset_str);
-            if(custom_data) free(custom_data);
-            break;
-        }
-
-        if(subghz_transmitter_deserialize(tx, fff) != SubGhzProtocolStatusOk) {
-            subghz_transmitter_free(tx);
-            subghz_environment_free(env);
-            furi_string_free(proto_str);
-            furi_string_free(preset_str);
-            if(custom_data) free(custom_data);
-            break;
-        }
-
+        /* Initialise the CC1101 ONCE for the whole burst */
         const SubGhzDevice* dev =
             subghz_devices_get_by_name(SUBGHZ_DEVICE_CC1101_INT_NAME);
-
         subghz_devices_reset(dev);
         subghz_devices_idle(dev);
         subghz_devices_load_preset(dev, preset_enum, custom_data);
@@ -153,33 +133,53 @@ static bool subghz_transmit_file(const char* filepath) {
         if(!subghz_devices_set_tx(dev)) {
             /* Frequency blocked by region settings */
             subghz_devices_idle(dev);
-            subghz_transmitter_free(tx);
-            subghz_environment_free(env);
             furi_string_free(proto_str);
-            furi_string_free(preset_str);
             if(custom_data) free(custom_data);
             break;
         }
 
-        subghz_devices_start_async_tx(dev, subghz_transmitter_yield, tx);
+        ok = true;
 
-        /* Wait up to 30 s for the async TX to finish */
-        uint32_t timeout = 30000u;
-        while(!subghz_devices_is_async_complete_tx(dev) && timeout > 0u) {
-            furi_delay_ms(10);
-            timeout -= 10u;
+        /* Burst loop — only transmitter state is reset between sends.
+         * subghz_transmitter_deserialize rewinds the format internally. */
+        for(uint8_t i = 0; i < count; i++) {
+            SubGhzEnvironment* env = subghz_environment_alloc();
+            subghz_environment_set_protocol_registry(env, &subghz_protocol_registry);
+            SubGhzTransmitter* tx =
+                subghz_transmitter_alloc_init(env, furi_string_get_cstr(proto_str));
+
+            if(!tx) {
+                subghz_environment_free(env);
+                ok = false;
+                break;
+            }
+
+            if(subghz_transmitter_deserialize(tx, fff) != SubGhzProtocolStatusOk) {
+                subghz_transmitter_free(tx);
+                subghz_environment_free(env);
+                ok = false;
+                break;
+            }
+
+            subghz_devices_start_async_tx(dev, subghz_transmitter_yield, tx);
+
+            uint32_t timeout = 30000u;
+            while(!subghz_devices_is_async_complete_tx(dev) && timeout > 0u) {
+                furi_delay_ms(10);
+                timeout -= 10u;
+            }
+            subghz_devices_stop_async_tx(dev);
+
+            subghz_transmitter_free(tx);
+            subghz_environment_free(env);
+
+            if(i < count - 1u) furi_delay_ms(delay_ms);
         }
 
-        subghz_devices_stop_async_tx(dev);
         subghz_devices_idle(dev);
-
-        subghz_transmitter_free(tx);
-        subghz_environment_free(env);
         furi_string_free(proto_str);
-        furi_string_free(preset_str);
         if(custom_data) free(custom_data);
 
-        ok = true;
     } while(false);
 
     flipper_format_free(fff);
@@ -188,9 +188,15 @@ static bool subghz_transmit_file(const char* filepath) {
 }
 
 /* TX worker thread — keeps the UI responsive during transmission */
+/* 3 sends per second for 5 seconds = 15 total */
+#define TX_BURST_COUNT    15u
+#define TX_BURST_DELAY_MS 333u
+
 static int32_t tx_thread_fn(void* ctx) {
     GpsGarageApp* app = ctx;
-    subghz_transmit_file(app->config.subghz_file);
+    notification_message(app->notifications, &sequence_blink_start_blue);
+    subghz_transmit_burst(app->config.subghz_file, TX_BURST_COUNT, TX_BURST_DELAY_MS);
+    notification_message(app->notifications, &sequence_blink_stop);
     app->is_transmitting = false;
     view_dispatcher_send_custom_event(app->view_dispatcher, APP_EVT_TX_DONE);
     return 0;
@@ -201,14 +207,13 @@ static void start_tx(GpsGarageApp* app) {
     if(app->config.subghz_file[0] == '\0') return;
 
     app->is_transmitting = true;
-    app->last_tx_tick    = furi_get_tick();
 
     if(app->tx_thread) {
         furi_thread_join(app->tx_thread);
         furi_thread_free(app->tx_thread);
     }
     app->tx_thread =
-        furi_thread_alloc_ex("SubGhzTX", 2 * 1024, tx_thread_fn, app);
+        furi_thread_alloc_ex("SubGhzTX", 4 * 1024, tx_thread_fn, app);
     furi_thread_start(app->tx_thread);
 }
 
@@ -300,8 +305,10 @@ static void main_view_draw(Canvas* canvas, void* model) {
         status = status_buf;
     } else if(app->is_transmitting) {
         status = "TRANSMITTING...";
-    } else if(app->in_range && app->config.tracking_enabled) {
+    } else if(app->in_range && app->config.tracking_enabled && app->trigger_armed) {
         status = "IN RANGE - will TX";
+    } else if(app->in_range && app->config.tracking_enabled) {
+        status = "IN RANGE - sent";
     } else if(app->config.tracking_enabled) {
         status = "TRACKING (3x back)";
     } else {
@@ -479,15 +486,18 @@ static bool custom_event_callback(void* ctx, uint32_t event) {
                     app->config.target_lat,
                     app->config.target_lon);
                 app->current_distance_m = dist;
-                app->in_range           = (dist <= app->config.radius_m);
+                bool now_in_range = (dist <= app->config.radius_m);
 
-                if(app->in_range) {
-                    uint32_t elapsed_ms  = furi_get_tick() - app->last_tx_tick;
-                    uint32_t cooldown_ms = app->config.cooldown_s * 1000u;
-                    if(elapsed_ms >= cooldown_ms) {
-                        start_tx(app);
-                    }
+                if(!now_in_range) {
+                    /* Outside zone: re-arm so next entry fires */
+                    app->trigger_armed = true;
+                } else if(app->trigger_armed) {
+                    /* Just entered (or started inside) the zone */
+                    app->trigger_armed = false;
+                    start_tx(app);
                 }
+
+                app->in_range = now_in_range;
             }
         }
         with_view_model(app->main_view, MainViewModel * vm, { (void)vm; }, true);
@@ -520,12 +530,8 @@ int32_t gps_garage_app(void* p) {
         app->config.tracking_enabled = true;
     }
 
-    /*
-     * Allow an immediate first transmission on the first entry into range
-     * by pretending the last TX happened just over one cooldown period ago.
-     */
-    app->last_tx_tick =
-        furi_get_tick() - (app->config.cooldown_s + 1u) * 1000u;
+    /* Armed: will fire the moment the zone is first entered */
+    app->trigger_armed = true;
 
     app->gps_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
 
@@ -533,8 +539,9 @@ int32_t gps_garage_app(void* p) {
     subghz_devices_init();
 
     /* Open services */
-    app->dialogs = furi_record_open(RECORD_DIALOGS);
-    app->gui     = furi_record_open(RECORD_GUI);
+    app->notifications = furi_record_open(RECORD_NOTIFICATION);
+    app->dialogs       = furi_record_open(RECORD_DIALOGS);
+    app->gui           = furi_record_open(RECORD_GUI);
 
     /* ── Build main view ──────────────────────────────────────────── */
     app->main_view = view_alloc();
@@ -583,12 +590,16 @@ int32_t gps_garage_app(void* p) {
 
     subghz_devices_deinit();
 
+    /* Reset LED in case we exited mid-burst */
+    notification_message(app->notifications, &sequence_reset_rgb);
+
     view_dispatcher_remove_view(app->view_dispatcher, 0);
     view_free(app->main_view);
     view_dispatcher_free(app->view_dispatcher);
 
     furi_record_close(RECORD_GUI);
     furi_record_close(RECORD_DIALOGS);
+    furi_record_close(RECORD_NOTIFICATION);
 
     furi_mutex_free(app->gps_mutex);
     free(app);
