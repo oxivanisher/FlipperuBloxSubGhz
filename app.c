@@ -229,7 +229,7 @@ static void main_view_draw(Canvas* canvas, void* model) {
 
     /* ── Title bar ─────────────────────────────────────────────────── */
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 0, 10, "GPS Garage Opener");
+    canvas_draw_str(canvas, 0, 10, "GPS Garage");
     canvas_set_font(canvas, FontSecondary);
 
     char sat_buf[10];
@@ -475,6 +475,12 @@ int32_t gps_garage_app(void* p) {
     memset(app, 0, sizeof(*app));
 
     config_load(&app->config);
+
+    /* Auto-enable tracking if everything is already configured */
+    if(app->config.target_set && app->config.subghz_file[0] != '\0') {
+        app->config.tracking_enabled = true;
+    }
+
     /*
      * Allow an immediate first transmission on the first entry into range
      * by pretending the last TX happened just over one cooldown period ago.
