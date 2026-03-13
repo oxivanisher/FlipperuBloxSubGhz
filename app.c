@@ -9,7 +9,6 @@
  *
  * Controls:
  *   OK (short)    – manual SubGHz transmit
- *   OK (long)     – toggle auto-tracking on/off
  *   UP (long)     – capture current GPS position as trigger target
  *   DOWN (long)   – browse and select .sub file
  *   LEFT / RIGHT  – decrease / increase trigger radius by 5 m
@@ -48,6 +47,10 @@
 typedef struct {
     GpsGarageApp* app;
 } MainViewModel;
+
+/* Exit-lock constants (3× BACK within 2 s required while tracking) */
+#define BACK_LOCK_PRESSES   3u
+#define BACK_LOCK_WINDOW_MS 2000u
 
 /* ══════════════════════════════════════════════════════════════════════
  * SubGHz transmission helpers
@@ -287,15 +290,23 @@ static void main_view_draw(Canvas* canvas, void* model) {
     canvas_draw_str(canvas, 24, 52, fname ? fname : "(none - hold DN)");
 
     /* ── Status line ───────────────────────────────────────────────── */
+    char status_buf[24];
     const char* status;
-    if(app->is_transmitting)
+    if(app->back_press_count > 0) {
+        snprintf(
+            status_buf, sizeof(status_buf),
+            "BACK x%u to stop",
+            (unsigned)(BACK_LOCK_PRESSES - app->back_press_count));
+        status = status_buf;
+    } else if(app->is_transmitting) {
         status = "TRANSMITTING...";
-    else if(app->in_range && app->config.tracking_enabled)
+    } else if(app->in_range && app->config.tracking_enabled) {
         status = "IN RANGE - will TX";
-    else if(app->config.tracking_enabled)
-        status = "TRACKING  (holdOK off)";
-    else
-        status = "IDLE  (holdOK = track)";
+    } else if(app->config.tracking_enabled) {
+        status = "TRACKING (3x back)";
+    } else {
+        status = "IDLE (OK=track)";
+    }
     canvas_draw_str(canvas, 0, 63, status);
 }
 
@@ -309,7 +320,13 @@ static bool main_view_input(InputEvent* event, void* ctx) {
     if(event->type == InputTypeShort) {
         switch(event->key) {
         case InputKeyOk:
-            start_tx(app);
+            if(!app->config.tracking_enabled) {
+                app->config.tracking_enabled = true;
+                config_save(&app->config);
+                with_view_model(app->main_view, MainViewModel * vm, { (void)vm; }, true);
+            } else {
+                start_tx(app);
+            }
             return true;
         case InputKeyLeft:
             app->config.radius_m -= CONFIG_RADIUS_STEP_M;
@@ -332,12 +349,6 @@ static bool main_view_input(InputEvent* event, void* ctx) {
 
     if(event->type == InputTypeLong) {
         switch(event->key) {
-        case InputKeyOk:
-            app->config.tracking_enabled = !app->config.tracking_enabled;
-            config_save(&app->config);
-            with_view_model(app->main_view, MainViewModel * vm, { (void)vm; }, true);
-            return true;
-
         case InputKeyUp: {
             /* Capture current GPS position as trigger target */
             furi_mutex_acquire(app->gps_mutex, FuriWaitForever);
@@ -393,7 +404,35 @@ static bool main_view_input(InputEvent* event, void* ctx) {
 
 static bool navigation_callback(void* ctx) {
     GpsGarageApp* app = ctx;
-    view_dispatcher_stop(app->view_dispatcher);
+
+    /* No lock when tracking is off */
+    if(!app->config.tracking_enabled) {
+        view_dispatcher_stop(app->view_dispatcher);
+        return true;
+    }
+
+    uint32_t now = furi_get_tick();
+
+    /* Reset the counter if the window expired */
+    if(app->back_press_count > 0 &&
+       (now - app->back_press_tick) > BACK_LOCK_WINDOW_MS) {
+        app->back_press_count = 0;
+    }
+
+    if(app->back_press_count == 0) {
+        app->back_press_tick = now;
+    }
+    app->back_press_count++;
+
+    if(app->back_press_count >= BACK_LOCK_PRESSES) {
+        app->back_press_count = 0;
+        app->config.tracking_enabled = false;
+        config_save(&app->config);
+        with_view_model(app->main_view, MainViewModel * vm, { (void)vm; }, true);
+    } else {
+        /* Redraw so the "BACK xN to stop" prompt updates immediately */
+        with_view_model(app->main_view, MainViewModel * vm, { (void)vm; }, true);
+    }
     return true;
 }
 

@@ -36,6 +36,10 @@ typedef struct GpsGarageApp {
     uint32_t last_tx_tick;       /* furi_get_tick() at last TX start  */
     bool     is_transmitting;
 
+    /* ── Exit lock (requires 3× BACK while tracking) ──────────────── */
+    uint8_t  back_press_count;
+    uint32_t back_press_tick;    /* furi_get_tick() of first press in sequence */
+
     /* ── Sub-components ───────────────────────────────────────────── */
     struct GpsWorker* gps_worker;
     FuriTimer*        position_timer;
