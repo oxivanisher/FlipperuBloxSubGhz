@@ -11,7 +11,6 @@ void config_defaults(AppConfig* cfg) {
     cfg->target_lon       = 0;
     cfg->target_set       = false;
     cfg->radius_m         = CONFIG_RADIUS_DEFAULT_M;
-    cfg->cooldown_s       = CONFIG_COOLDOWN_DEFAULT_S;
     cfg->subghz_file[0]   = '\0';
     cfg->tracking_enabled = false;
 }
@@ -46,6 +45,7 @@ void config_load(AppConfig* cfg) {
     furi_record_close(RECORD_STORAGE);
 
     /* Parse line by line without strtok_r (disabled in Flipper SDK) */
+    bool lat_found = false, lon_found = false;
     char* p = buf;
     while(*p) {
         /* Find end of this line */
@@ -65,13 +65,12 @@ void config_load(AppConfig* cfg) {
 
         if(strncmp(line, "lat=", 4) == 0) {
             cfg->target_lat = strtod(line + 4, NULL);
-            cfg->target_set = true;
+            lat_found = true;
         } else if(strncmp(line, "lon=", 4) == 0) {
             cfg->target_lon = strtod(line + 4, NULL);
+            lon_found = true;
         } else if(strncmp(line, "radius=", 7) == 0) {
             cfg->radius_m = strtof(line + 7, NULL);
-        } else if(strncmp(line, "cooldown=", 9) == 0) {
-            cfg->cooldown_s = (uint32_t)atoi(line + 9);
         } else if(strncmp(line, "file=", 5) == 0) {
             strncpy(cfg->subghz_file, line + 5, CONFIG_SUB_PATH_MAX - 1);
             cfg->subghz_file[CONFIG_SUB_PATH_MAX - 1] = '\0';
@@ -79,6 +78,7 @@ void config_load(AppConfig* cfg) {
             cfg->tracking_enabled = (line[9] == '1');
         }
     }
+    cfg->target_set = lat_found && lon_found;
 }
 
 bool config_save(const AppConfig* cfg) {
@@ -96,11 +96,10 @@ bool config_save(const AppConfig* cfg) {
     int  n = snprintf(
         buf,
         sizeof(buf),
-        "lat=%.8f\nlon=%.8f\nradius=%.1f\ncooldown=%lu\nfile=%s\ntracking=%d\n",
+        "lat=%.8f\nlon=%.8f\nradius=%.1f\nfile=%s\ntracking=%d\n",
         cfg->target_lat,
         cfg->target_lon,
         (double)cfg->radius_m,
-        (unsigned long)cfg->cooldown_s,
         cfg->subghz_file,
         cfg->tracking_enabled ? 1 : 0);
 

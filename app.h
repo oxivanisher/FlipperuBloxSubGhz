@@ -30,13 +30,14 @@ typedef struct GpsGarageApp {
     double     gps_lat;
     double     gps_lon;
     bool       gps_fix;
+    bool       gps_module_present; /* true while NMEA data is arriving */
     uint8_t    gps_satellites;
 
     /* ── Runtime state ────────────────────────────────────────────── */
     float    current_distance_m; /* last computed distance to target */
     bool     in_range;
     bool     trigger_armed;      /* true = will fire on next zone entry */
-    bool     is_transmitting;
+    volatile bool is_transmitting;
 
     /* ── Exit lock (requires 3× BACK while tracking) ──────────────── */
     uint8_t  back_press_count;
@@ -44,7 +45,6 @@ typedef struct GpsGarageApp {
 
     /* ── Sub-components ───────────────────────────────────────────── */
     struct GpsWorker* gps_worker;
-    FuriTimer*        position_timer;
     FuriThread*       tx_thread;
 
     /* ── Persistent config ────────────────────────────────────────── */

@@ -113,6 +113,10 @@ static bool subghz_transmit_burst(const char* filepath, uint8_t count, uint32_t 
                         fff, "Custom_preset_data", custom_data, custom_data_len);
                 }
             }
+            if(!custom_data) {
+                /* Custom preset with no data would hard-fault in load_preset */
+                break;
+            }
         }
 
         FuriString* proto_str = furi_string_alloc();
@@ -125,6 +129,11 @@ static bool subghz_transmit_burst(const char* filepath, uint8_t count, uint32_t 
         /* Initialise the CC1101 ONCE for the whole burst */
         const SubGhzDevice* dev =
             subghz_devices_get_by_name(SUBGHZ_DEVICE_CC1101_INT_NAME);
+        if(!dev) {
+            furi_string_free(proto_str);
+            if(custom_data) free(custom_data);
+            break;
+        }
         subghz_devices_reset(dev);
         subghz_devices_idle(dev);
         subghz_devices_load_preset(dev, preset_enum, custom_data);
@@ -227,10 +236,11 @@ static void main_view_draw(Canvas* canvas, void* model) {
 
     /* Snapshot GPS data under mutex to avoid tearing */
     furi_mutex_acquire(app->gps_mutex, FuriWaitForever);
-    bool    fix  = app->gps_fix;
-    uint8_t sats = app->gps_satellites;
-    double  clat = app->gps_lat;
-    double  clon = app->gps_lon;
+    bool    module = app->gps_module_present;
+    bool    fix    = app->gps_fix;
+    uint8_t sats   = app->gps_satellites;
+    double  clat   = app->gps_lat;
+    double  clon   = app->gps_lon;
     furi_mutex_release(app->gps_mutex);
 
     canvas_clear(canvas);
@@ -241,7 +251,9 @@ static void main_view_draw(Canvas* canvas, void* model) {
     canvas_set_font(canvas, FontSecondary);
 
     char sat_buf[10];
-    if(fix)
+    if(!module)
+        snprintf(sat_buf, sizeof(sat_buf), "[NoMod]");
+    else if(fix)
         snprintf(sat_buf, sizeof(sat_buf), "[%us]", (unsigned)sats);
     else
         snprintf(sat_buf, sizeof(sat_buf), "[NoFix]");
@@ -253,8 +265,10 @@ static void main_view_draw(Canvas* canvas, void* model) {
     char row[32];
     if(fix)
         snprintf(row, sizeof(row), "%.5f  %.5f", clat, clon);
-    else
+    else if(module)
         snprintf(row, sizeof(row), "Searching for fix...");
+    else
+        snprintf(row, sizeof(row), "No GPS module");
     canvas_draw_str(canvas, 0, 22, "Pos:");
     canvas_draw_str(canvas, 24, 22, row);
 
@@ -420,10 +434,12 @@ static bool navigation_callback(void* ctx) {
 
     uint32_t now = furi_get_tick();
 
-    /* Reset the counter if the window expired */
+    /* If the window expired, this press just resets the sequence — don't count it */
     if(app->back_press_count > 0 &&
        (now - app->back_press_tick) > BACK_LOCK_WINDOW_MS) {
         app->back_press_count = 0;
+        with_view_model(app->main_view, MainViewModel * vm, { (void)vm; }, true);
+        return true;
     }
 
     if(app->back_press_count == 0) {

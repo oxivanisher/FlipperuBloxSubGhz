@@ -47,8 +47,8 @@ static bool checksum_ok(const char* sentence) {
     if(*p != '*') return false;
     p++;
     /* Parse two-hex-digit expected checksum */
-    uint8_t hi = (uint8_t)(p[0] >= 'A' ? (p[0] - 'A' + 10) : (p[0] - '0'));
-    uint8_t lo = (uint8_t)(p[1] >= 'A' ? (p[1] - 'A' + 10) : (p[1] - '0'));
+    uint8_t hi = (uint8_t)(p[0] >= 'a' ? (p[0] - 'a' + 10) : p[0] >= 'A' ? (p[0] - 'A' + 10) : (p[0] - '0'));
+    uint8_t lo = (uint8_t)(p[1] >= 'a' ? (p[1] - 'a' + 10) : p[1] >= 'A' ? (p[1] - 'A' + 10) : (p[1] - '0'));
     return cs == (uint8_t)((hi << 4) | lo);
 }
 
@@ -89,6 +89,7 @@ bool nmea_parse_gga(const char* sentence, NmeaData* data) {
     if(!sentence || !data) return false;
     if(strncmp(sentence, "$GPGGA", 6) != 0 &&
        strncmp(sentence, "$GNGGA", 6) != 0) return false;
+    if(!checksum_ok(sentence)) return false;
 
     char buf[8];
     if(!field(sentence, 7, buf, sizeof(buf))) return false;
