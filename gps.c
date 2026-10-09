@@ -4,6 +4,7 @@
 #include <furi.h>
 #include <furi_hal_serial.h>
 #include <furi_hal_serial_control.h>
+#include <expansion/expansion.h>
 #include <gui/view_dispatcher.h>
 #include <string.h>
 
@@ -94,9 +95,14 @@ static int32_t gps_worker_thread(void* ctx) {
     GpsWorker*    worker = ctx;
     GpsGarageApp* app    = worker->app;
 
+    /* The expansion module service listens on the UART by default and the
+     * GPS NMEA stream keeps waking it up. It must be disabled before we
+     * acquire the port, or startup races against it. */
+    Expansion* expansion = furi_record_open(RECORD_EXPANSION);
+    expansion_disable(expansion);
+
     /* Acquire and configure serial port.
-     * When launched via shortcut the debug console may still hold the UART;
-     * retry a few times with a short delay before giving up gracefully. */
+     * Retry a few times with a short delay before giving up gracefully. */
     for(uint8_t tries = 0; tries < 10 && !worker->serial; tries++) {
         worker->serial = furi_hal_serial_control_acquire(FuriHalSerialIdUsart);
         if(!worker->serial) furi_delay_ms(50);
@@ -104,6 +110,8 @@ static int32_t gps_worker_thread(void* ctx) {
     if(!worker->serial) {
         /* Unable to get the serial port — run without GPS data */
         furi_thread_flags_wait(EVT_STOP, FuriFlagWaitAny, FuriWaitForever);
+        expansion_enable(expansion);
+        furi_record_close(RECORD_EXPANSION);
         return 0;
     }
     furi_hal_serial_init(worker->serial, GPS_BAUD_RATE);
@@ -193,6 +201,9 @@ static int32_t gps_worker_thread(void* ctx) {
     furi_hal_serial_deinit(worker->serial);
     furi_hal_serial_control_release(worker->serial);
     worker->serial = NULL;
+
+    expansion_enable(expansion);
+    furi_record_close(RECORD_EXPANSION);
     return 0;
 }
 
