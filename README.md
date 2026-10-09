@@ -107,24 +107,36 @@ To install it by hand, copy it to `/ext/apps/GPIO/` on the Flipper's SD card.
 7. **Adjust radius** with **LEFT** / **RIGHT** (5 m steps).
    A 30–50 m radius works well for most driveways.
 
-8. **Enable auto-tracking:** hold **OK** — status line shows `TRACKING`.
+8. **Enable auto-tracking:** press **OK** — status line shows `TRACKING`.
 
 Config is saved automatically and persists across reboots
 (`/ext/apps_data/gps_garage/config.txt`).
+Once a trigger point and a `.sub` file are set, the app starts in tracking
+mode. To change the settings later, press **BACK** 3 times to stop tracking
+first.
 
 ---
 
 ## Controls
 
+While **tracking is off** (status `IDLE`):
+
 | Button            | Action                                         |
 | ----------------- | ---------------------------------------------- |
-| **OK** (short)    | Transmit immediately                           |
-| **OK** (long)     | Toggle auto-tracking on / off                  |
+| **OK** (short)    | Start auto-tracking                            |
 | **UP** (long)     | Capture current GPS position as trigger target |
 | **DOWN** (long)   | Browse SD card and select `.sub` file          |
 | **LEFT** (short)  | Decrease trigger radius by 5 m                 |
 | **RIGHT** (short) | Increase trigger radius by 5 m                 |
 | **BACK**          | Exit app                                       |
+
+While **tracking is on**, the settings are locked so they can't be changed by
+accident:
+
+| Button                           | Action                                     |
+| -------------------------------- | ------------------------------------------ |
+| **OK / UP / DOWN / LEFT / RIGHT** | Transmit immediately (short or long press) |
+| **BACK** 3× within 2 s           | Stop tracking (press BACK again to exit)   |
 
 ---
 
@@ -164,7 +176,8 @@ You can edit this file directly from the Flipper file manager or from a PC.
 | Symptom                                  | Likely cause                                                               |
 | ---------------------------------------- | -------------------------------------------------------------------------- |
 | `[NoFix]` after several minutes outdoors | GPS antenna blocked — most breakout boards need open sky                   |
-| Door does not open automatically         | Tracking not enabled (hold OK), or no .sub file selected                   |
+| Door does not open automatically         | Tracking not enabled (press OK), or no .sub file selected                  |
 | "TRANSMITTING..." hangs                  | .sub file corrupt or unsupported protocol                                  |
 | Region error (TX fails silently)         | Frequency not permitted in your region; re-record at the correct frequency |
-| Wrong coordinates captured               | Wait for more satellites before pressing hold-UP                           |
+| Wrong coordinates captured               | Wait for more satellites before holding UP                                 |
+| UP / DOWN / LEFT / RIGHT just transmit   | Tracking is on, which locks the settings; press BACK 3× to stop tracking  |

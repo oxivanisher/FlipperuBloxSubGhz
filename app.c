@@ -338,16 +338,21 @@ static void main_view_draw(Canvas* canvas, void* model) {
 static bool main_view_input(InputEvent* event, void* ctx) {
     GpsGarageApp* app = ctx;
 
+    /* While tracking, the settings are locked: every button except BACK
+     * (3x to stop tracking, see navigation_callback) transmits manually. */
+    if(app->config.tracking_enabled && event->key != InputKeyBack) {
+        if(event->type == InputTypeShort || event->type == InputTypeLong) {
+            start_tx(app);
+        }
+        return true;
+    }
+
     if(event->type == InputTypeShort) {
         switch(event->key) {
         case InputKeyOk:
-            if(!app->config.tracking_enabled) {
-                app->config.tracking_enabled = true;
-                config_save(&app->config);
-                with_view_model(app->main_view, MainViewModel * vm, { (void)vm; }, true);
-            } else {
-                start_tx(app);
-            }
+            app->config.tracking_enabled = true;
+            config_save(&app->config);
+            with_view_model(app->main_view, MainViewModel * vm, { (void)vm; }, true);
             return true;
         case InputKeyLeft:
             app->config.radius_m -= CONFIG_RADIUS_STEP_M;
