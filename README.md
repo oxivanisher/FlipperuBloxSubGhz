@@ -47,24 +47,41 @@ uBlox modules).
 
 You need the [Flipper Zero firmware SDK](https://github.com/flipperdevices/flipperzero-firmware).
 
+The two repositories are cloned side by side, and this app is symlinked into
+the firmware's `applications_user` directory. You edit the app in its own
+repository, and the firmware build picks up the changes.
+
 ```bash
-# Clone the firmware (if not already done)
+mkdir -p ~/dev && cd ~/dev
+
+# Clone the firmware with its submodules
 git clone --recursive https://github.com/flipperdevices/flipperzero-firmware.git
-cd flipperzero-firmware
+# (Already cloned without --recursive? Run this inside flipperzero-firmware:
+#  git submodule update --init --recursive)
 
-# Copy this app into the applications_user directory
-cp -r /path/to/FlipperuBloxSubGhz applications_user/gps_garage_opener
+# Clone this app
+git clone https://github.com/oxivanisher/FlipperuBloxSubGhz.git
 
-# Build the .fap
+# Symlink the app into the firmware tree
+ln -s ~/dev/FlipperuBloxSubGhz ~/dev/flipperzero-firmware/applications_user/gps_garage_opener
+```
+
+Build from the firmware directory:
+
+```bash
+cd ~/dev/flipperzero-firmware
+
+# Build the .fap (the first run downloads the toolchain)
 ./fbt fap_gps_garage_opener
 
-# Or flash directly to a connected Flipper
+# Or build, upload and start it on a Flipper connected over USB
 ./fbt launch APPSRC=applications_user/gps_garage_opener
 ```
 
-The compiled `.fap` will be at
-`build/f7-firmware-D/.extapps/gps_garage_opener.fap`.
-Copy it to `/ext/apps/GPIO/` on the Flipper's SD card.
+The compiled `.fap` is written to
+`build/f7-firmware-DC/.extapps/gps_garage_opener.fap` (the folder name changes
+with the build configuration).
+To install it by hand, copy it to `/ext/apps/GPIO/` on the Flipper's SD card.
 
 ---
 
