@@ -32,6 +32,7 @@
 #include <notification/notification_messages.h>
 #include <storage/storage.h>
 #include <flipper_format/flipper_format.h>
+#include <assets_icons.h>
 /* SubGHz headers — note the filenames changed in this firmware version */
 #include <lib/subghz/environment.h>
 #include <lib/subghz/transmitter.h>
@@ -257,7 +258,21 @@ static void main_view_draw(Canvas* canvas, void* model) {
         snprintf(sat_buf, sizeof(sat_buf), "[%us]", (unsigned)sats);
     else
         snprintf(sat_buf, sizeof(sat_buf), "[NoFix]");
-    canvas_draw_str(canvas, 128 - (int)(strlen(sat_buf) * 6), 10, sat_buf);
+    /* Battery icon in the top-right corner, same look as the status bar */
+    const int bat_x = 128 - icon_get_width(&I_Battery_26x8);
+    canvas_draw_icon(canvas, bat_x, 2, &I_Battery_26x8);
+    canvas_draw_box(canvas, bat_x + 2, 4, (app->battery_pct + 4) / 5, 4);
+    if(app->battery_charging) {
+        canvas_set_bitmap_mode(canvas, true);
+        canvas_set_color(canvas, ColorWhite);
+        canvas_draw_icon(canvas, bat_x + 8, 1, &I_Charging_lightning_mask_9x10);
+        canvas_set_color(canvas, ColorBlack);
+        canvas_draw_icon(canvas, bat_x + 8, 1, &I_Charging_lightning_9x10);
+        canvas_set_bitmap_mode(canvas, false);
+    }
+
+    canvas_draw_str(
+        canvas, bat_x - 2 - (int)canvas_string_width(canvas, sat_buf), 10, sat_buf);
 
     canvas_draw_line(canvas, 0, 12, 127, 12);
 
@@ -464,6 +479,11 @@ static bool navigation_callback(void* ctx) {
     return true;
 }
 
+static void app_update_battery(GpsGarageApp* app) {
+    app->battery_pct      = furi_hal_power_get_pct();
+    app->battery_charging = furi_hal_power_is_charging();
+}
+
 static bool custom_event_callback(void* ctx, uint32_t event) {
     GpsGarageApp* app = ctx;
 
@@ -490,6 +510,8 @@ static bool custom_event_callback(void* ctx, uint32_t event) {
     }
 
     if(event == APP_EVT_TIMER_TICK) {
+        app_update_battery(app);
+
         if(app->config.tracking_enabled &&
            app->config.target_set &&
            app->config.subghz_file[0] != '\0' &&
@@ -555,6 +577,7 @@ int32_t gps_garage_app(void* p) {
     app->trigger_armed = true;
 
     app->gps_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
+    app_update_battery(app);
 
     /* One-time SubGHz device list init */
     subghz_devices_init();

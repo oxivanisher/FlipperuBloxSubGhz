@@ -38,6 +38,8 @@ typedef struct GpsGarageApp {
     bool     in_range;
     bool     trigger_armed;      /* true = will fire on next zone entry */
     volatile bool is_transmitting;
+    uint8_t  battery_pct;        /* refreshed on every timer tick */
+    bool     battery_charging;
 
     /* ── Exit lock (requires 3× BACK while tracking) ──────────────── */
     uint8_t  back_press_count;
