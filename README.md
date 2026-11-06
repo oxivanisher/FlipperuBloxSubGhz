@@ -181,3 +181,7 @@ You can edit this file directly from the Flipper file manager or from a PC.
 | Region error (TX fails silently)         | Frequency not permitted in your region; re-record at the correct frequency |
 | Wrong coordinates captured               | Wait for more satellites before holding UP                                 |
 | UP / DOWN / LEFT / RIGHT just transmit   | Tracking is on, which locks the settings; press BACK 3× to stop tracking  |
+
+## License
+
+GNU General Public License v3.0 — see [LICENSE](LICENSE).
